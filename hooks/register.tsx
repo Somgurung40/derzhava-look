@@ -42,7 +42,13 @@ const LOOK: ThemeSetArgs = {
   backdrop: { scene: 'beach', glass: { blur: 14, opacity: 0.6 } },
 }
 
+// Режим: auto — как у человека в Claude Code, light/dark — принудительно кнопками над вводом.
+type Scheme = 'auto' | 'light' | 'dark'
+const lookFor = (mode: Scheme): ThemeSetArgs => (mode === 'auto' ? LOOK : { ...LOOK, overrideColorScheme: mode })
+
 const armedAt = atom({ plugin: 'derzhava-look', key: 'armedAt' } as const, null)
+const themeSession = atom({ plugin: 'derzhava-look', key: 'themeSession' } as const, null)
+const scheme = atom({ plugin: 'derzhava-look', key: 'scheme' } as const, 'auto' as Scheme)
 const CONFIRM_MS = 5000
 
 export const register: Register = on => {
@@ -50,7 +56,7 @@ export const register: Register = on => {
     const unpainted = problems.find(line => line.startsWith("Desktop won't paint"))
     if (unpainted !== undefined) $.ui.toast(unpainted)
 
-    const set = await $.theme.set(LOOK)
+    const set = await $.theme.set(lookFor(await read($, scheme)))
     if (!set.isDrawn) $.ui.status(set.reason)
 
     return next(e)
@@ -64,6 +70,19 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
+
+    // /clear даёт новую сессию без session.start — тему ставим заново для каждой сессии.
+    const sid = await $.session.id()
+    if ((await read($, themeSession)) !== sid) {
+      await update($, themeSession, () => sid)
+      await $.theme.set(lookFor(await read($, scheme)))
+    }
+
+    const mode = await read($, scheme)
+    const pick = (next: Scheme) => async () => {
+      await update($, scheme, () => next)
+      await $.theme.set(lookFor(next))
+    }
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const since = await read($, armedAt)
@@ -105,6 +124,15 @@ export const register: Register = on => {
           onPress={press}
         >
           {isArmed ? 'Точно очистить? Нажмите ещё раз' : '🧹 Очистить контекст (/clear)'}
+        </Button>
+        <Button key="scheme-light" variant={mode === 'light' ? 'primary' : undefined} onPress={pick('light')}>
+          ☀ Светлая
+        </Button>
+        <Button key="scheme-dark" variant={mode === 'dark' ? 'primary' : undefined} onPress={pick('dark')}>
+          🌙 Тёмная
+        </Button>
+        <Button key="scheme-auto" variant={mode === 'auto' ? 'primary' : undefined} onPress={pick('auto')}>
+          ◐ Как в системе
         </Button>
       </Box>
     )
