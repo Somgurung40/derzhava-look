@@ -9,7 +9,7 @@
 В Claude Code (терминал), в папке проекта:
 
 ```
-/plugin install derzhava-look --marketplace <владелец>/derzhava-look
+/plugin install derzhava-look --marketplace Somgurung40/derzhava-look
 ```
 
 Затем `y`, чтобы добавить маркетплейс, и выбрать область (scope).
