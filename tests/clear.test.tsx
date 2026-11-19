@@ -4,6 +4,8 @@ const BAND = { plugin: 'derzhava-look', surface: 'desktop', component: 'AbovePro
 
 test('одно нажатие не чистит, второе в 5 с — запускает /clear, через 5 с — сброс', async ($, on) => {
   const clock = mock.clock(on, { now: 1000 })
+  mock.store(on)
+  on('session.id', () => ({ value: 'test-session' }))
   const ran: string[] = []
   on('command.run', (_, e) => {
     ran.push(e.command)

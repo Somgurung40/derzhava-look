@@ -51,19 +51,46 @@ const themeSession = atom({ plugin: 'derzhava-look', key: 'themeSession' } as co
 const scheme = atom({ plugin: 'derzhava-look', key: 'scheme' } as const, 'auto' as Scheme)
 const CONFIRM_MS = 5000
 
+// Тема живёт только в своей сессии: /clear и --resume её сбрасывают. Ставим заново в каждой новой сессии;
+// выбранный режим хранится между сессиями в $.store.
+const ensureLook = async ($: any): Promise<void> => {
+  const sid = await $.session.id()
+  if ((await read($, themeSession)) === sid) return
+  await update($, themeSession, () => sid)
+  const saved = await $.store.get('scheme')
+  const mode: Scheme = saved === 'light' || saved === 'dark' ? saved : 'auto'
+  await update($, scheme, () => mode)
+  const set = await $.theme.set(lookFor(mode))
+  if (!set.isDrawn) $.ui.status(set.reason)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const unpainted = problems.find(line => line.startsWith("Desktop won't paint"))
     if (unpainted !== undefined) $.ui.toast(unpainted)
+    await ensureLook($)
+    return next(e)
+  })
 
-    const set = await $.theme.set(lookFor(await read($, scheme)))
-    if (!set.isDrawn) $.ui.status(set.reason)
+  // /clear, набранный руками или нажатый кнопкой, — сразу после него ставим тему новой сессии.
+  on('command.run', async ($, e, next) => {
+    const r = await next(e)
+    try {
+      await ensureLook($)
+    } catch {
+      // тему поставит prompt.submit
+    }
+    return r
+  })
 
+  // Первое сообщение после /clear тоже ставит тему, если полоса над вводом не успела.
+  on('prompt.submit', async ($, e, next) => {
+    await ensureLook($)
     return next(e)
   })
 
   on('ui.render', { component: 'Backdrop' }, ($, e, next) => {
-    if ((e.surface !== 'desktop' && e.surface !== 'mobile') || e.props.scene !== 'beach') return next(e)
+    if ((e.surface !== 'desktop' && e.surface !== 'mobile') || e.props.scene !== 'beach' || e.props.plugin !== 'derzhava-look') return next(e)
     const { Svg } = $.ui.resolve(e)
     return <Svg source={SCENE} alt="Пляж: днём сине-жёлтый, ночью красно-чёрный" />
   })
@@ -71,17 +98,13 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
 
-    // /clear даёт новую сессию без session.start — тему ставим заново для каждой сессии.
-    const sid = await $.session.id()
-    if ((await read($, themeSession)) !== sid) {
-      await update($, themeSession, () => sid)
-      await $.theme.set(lookFor(await read($, scheme)))
-    }
+    // Рисование чистое: состояние и тему здесь менять нельзя — только из событий (см. ensureLook выше).
 
     const mode = await read($, scheme)
-    const pick = (next: Scheme) => async () => {
-      await update($, scheme, () => next)
-      await $.theme.set(lookFor(next))
+    const pick = (to: Scheme) => async () => {
+      await update($, scheme, () => to)
+      await $.store.set('scheme', to)
+      await $.theme.set(lookFor(to))
     }
 
     const { Box, Button, Text } = $.ui.resolve(e)
