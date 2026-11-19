@@ -1,0 +1,1 @@
+{ "name": "derzhava-look", "version": "0.1.0", "description": "Оформление «Державный» и кнопка «Очистить контекст» (/clear) над вводом", "license": "MIT", "types": "./types/index.d.ts" }

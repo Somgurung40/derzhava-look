@@ -1,0 +1,5 @@
+{
+  "name": "derzhava-look",
+  "owner": { "name": "Derzhava" },
+  "plugins": [{ "name": "derzhava-look", "source": "./" }]
+}
